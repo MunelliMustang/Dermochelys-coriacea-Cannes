@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e1015">
+<meta name="color-scheme" content="dark">
+<title>Agenda</title>
+<style>
+  :root { color-scheme:dark; --bg:#0e1015; --carte:#171a21; --ligne:#2a2f3a; --txt:#e9e9f0; --doux:#9aa0ae; --accent:#8b5cf6; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; background:var(--bg); color:var(--txt); font:15px/1.4 system-ui,sans-serif; }
+  header { position:sticky; top:0; z-index:10; background:rgba(14,16,21,.94); backdrop-filter:blur(8px); border-bottom:1px solid var(--ligne);
+    padding:calc(10px + env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) 10px max(14px,env(safe-area-inset-left)); }
+  .haut { display:flex; align-items:center; justify-content:space-between; gap:10px; max-width:860px; margin:0 auto; }
+  h1 { font-size:18px; margin:0; }
+  a.retour { color:var(--txt); text-decoration:none; border:1px solid var(--ligne); border-radius:8px; padding:8px 12px; font-size:14px; }
+  .legende { max-width:860px; margin:8px auto 0; display:flex; gap:4px 12px; flex-wrap:wrap; font-size:12px; color:var(--doux); }
+  .legende i { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:-1px; }
+  main { max-width:860px; margin:0 auto; padding:12px max(14px,env(safe-area-inset-right)) calc(40px + env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left)); }
+
+  .jour { background:var(--carte); border:1px solid var(--ligne); border-radius:12px; padding:10px 12px 10px; margin-bottom:10px; }
+  .jour.auj { border-color:var(--accent); }
+  .tete { display:flex; align-items:center; gap:10px; }
+  .tete > div:first-child { flex:1; min-width:0; }
+  .d { color:var(--doux); font-size:13px; }
+  .eph { font-size:12px; color:var(--doux); white-space:nowrap; }
+  .plus { width:38px; height:38px; flex:none; border-radius:50%; border:1px solid var(--ligne); background:#232834; color:var(--txt); font-size:22px; line-height:1; cursor:pointer; }
+  .plus:hover { background:var(--accent); }
+
+  .piste { position:relative; height:44px; margin:6px 22px 0; }
+  .fond { position:absolute; left:0; right:0; top:18px; height:8px; border-radius:4px; }
+  .sol { position:absolute; top:13px; width:10px; height:10px; margin-left:-5px; border-radius:50%; box-shadow:0 0 0 2px var(--carte); }
+  .sol.r { background:#fbbf24; } .sol.c { background:#fb923c; }
+  .maint { position:absolute; top:8px; width:2px; height:28px; margin-left:-1px; background:#fff; opacity:.85; border-radius:1px; }
+  .zone { position:absolute; inset:0; pointer-events:none; }
+  .plage { position:absolute; top:9px; height:26px; border-radius:6px; box-shadow:0 0 0 1px rgba(0,0,0,.35); }
+  .pg { position:absolute; top:-5px; width:22px; height:36px; display:flex; align-items:center; touch-action:none; cursor:ew-resize; outline:none; pointer-events:auto; }
+  .pg.s { right:100%; margin-right:-4px; justify-content:flex-end; }
+  .pg.e { left:100%; margin-left:-4px; }
+  .pg::after { content:""; width:6px; height:30px; border-radius:3px; background:#fff; box-shadow:0 0 0 1px rgba(0,0,0,.5); }
+  .pg:focus-visible::after, .pg.actif::after { box-shadow:0 0 0 3px var(--accent); }
+  .heures { position:relative; height:26px; margin:0 22px; font-size:10px; color:var(--doux);
+    background: linear-gradient(#6b7280,#6b7280) right top / 1px 9px no-repeat,
+                linear-gradient(90deg,#8b92a1 1px,transparent 1px) left top / 6.25% 9px repeat-x,
+                linear-gradient(90deg,#4b5160 1px,transparent 1px) left top / 3.125% 5px repeat-x; }
+  .heures span { position:absolute; top:11px; transform:translateX(-50%); }
+
+  .ligne { display:flex; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap; }
+  .ligne .pt { width:12px; height:12px; border-radius:3px; flex:none; }
+  .hh { font-variant-numeric:tabular-nums; }
+  select, .x, .suite { background:#232834; color:var(--txt); border:1px solid var(--ligne); border-radius:8px; font:inherit; min-height:38px; padding:6px 10px; }
+  select { font-size:16px; } .x, .suite { cursor:pointer; } .x { min-width:38px; }
+  .suite { display:block; width:100%; margin-top:6px; }
+  :focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+  .note { color:var(--doux); font-size:12px; margin:0 0 10px; }
+  .actions { display:flex; gap:8px; }
+  button.retour { background:none; color:var(--txt); border:1px solid var(--ligne); border-radius:8px; padding:8px 12px; font:inherit; font-size:14px; cursor:pointer; }
+  .humeur { width:40px; height:40px; flex:none; border-radius:50%; border:1px solid var(--ligne); background:#232834; font-size:22px; line-height:1; cursor:pointer; padding:0; color:var(--txt); }
+  .humeur.vide { border-style:dashed; color:var(--doux); font-size:18px; }
+  .menu { position:fixed; z-index:50; background:#1f232d; border:1px solid var(--ligne); border-radius:12px; padding:6px; box-shadow:0 8px 24px rgba(0,0,0,.5); min-width:220px; }
+  .menu button { display:flex; align-items:center; gap:10px; width:100%; background:none; border:0; color:var(--txt); font:inherit; padding:9px 10px; border-radius:8px; cursor:pointer; text-align:left; min-height:42px; }
+  .menu button:hover, .menu button:focus-visible { background:#2c3240; }
+  .menu .em { font-size:20px; width:26px; text-align:center; }
+  dialog { background:var(--carte); color:var(--txt); border:1px solid var(--ligne); border-radius:12px; width:min(480px,92vw); padding:16px; }
+  dialog::backdrop { background:rgba(0,0,0,.65); }
+  dialog h2 { margin:0 0 6px; font-size:17px; }
+  .cat { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
+  .cat input[type=color] { width:44px; height:40px; padding:2px; background:#232834; border:1px solid var(--ligne); border-radius:8px; flex:none; }
+  .cat input[type=text] { flex:1; min-width:0; background:#232834; color:var(--txt); border:1px solid var(--ligne); border-radius:8px; font:inherit; font-size:16px; padding:8px 10px; min-height:40px; }
+  .x:disabled { opacity:.3; cursor:default; }
+  .equipe { position:relative; height:14px; margin:2px 22px 0; border-radius:7px; overflow:hidden; cursor:pointer; }
+  .seg { position:absolute; top:0; bottom:0; }
+  .seg.n0 { background:rgba(203,213,225,.12); } .seg.n1 { background:rgba(203,213,225,.38); }
+  .seg.n2 { background:rgba(203,213,225,.7); } .seg.n3 { background:#8b5cf6; }
+  .tip { position:fixed; z-index:60; background:#1f232d; border:1px solid var(--ligne); border-radius:10px; padding:8px 10px; font-size:13px; box-shadow:0 8px 24px rgba(0,0,0,.5); max-width:260px; pointer-events:none; }
+  .tip b { display:block; margin-bottom:2px; }
+  .pseudo { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--doux); max-width:860px; margin:8px auto 0; }
+  .pseudo input { background:#232834; color:var(--txt); border:1px solid var(--ligne); border-radius:8px; font:inherit; font-size:16px; padding:6px 10px; min-height:38px; width:190px; max-width:60vw; }
+  label.note { display:flex; align-items:center; gap:8px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="haut"><h1>Agenda</h1><div class="actions"><button class="retour" id="bAdmin" type="button">Admin</button><a class="retour" href="carte-cannes.html">← Carte</a></div></div>
+  <label class="pseudo">Mon pseudo <input id="pseudo" type="text" maxlength="24" placeholder="Visible par l’équipe" autocomplete="nickname"></label>
+  <div class="legende" id="legende" aria-label="Catégories"></div>
+</header>
+<main>
+  <p class="note">Faites glisser les deux curseurs d’une plage (pas de 30 min, de 6 h à 22 h). Le fond de chaque journée suit le lever et le coucher du soleil à Cannes (points jaune et orange). La fine barre sous la réglette indique combien de personnes sont disponibles : survolez-la ou touchez-la pour voir qui. Pour l’instant, les données restent sur cet appareil.</p>
+  <label class="note"><input type="checkbox" id="demo"> Aperçu avec 4 collègues fictifs (données de démonstration)</label>
+  <div id="jours"></div>
+  <button class="suite" id="plusJours" type="button">Afficher 14 jours de plus</button>
+</main>
+
+<dialog id="dlgAdmin" aria-labelledby="dlgTitre">
+  <h2 id="dlgTitre">Administration · catégories</h2>
+  <p class="note">Changez le nom ou la couleur, ajoutez ou supprimez des catégories. Elles s’appliqueront à toute l’équipe une fois la base partagée en place.</p>
+  <div id="listeCats"></div>
+  <div class="ligne"><button class="suite" id="ajoutCat" type="button" style="margin:0;flex:1">+ Ajouter une catégorie</button>
+  <button class="suite" id="fermerAdmin" type="button" style="margin:0;width:auto">Fermer</button></div>
+</dialog>
+
+<script>
+(function () {
+  var LAT = 43.5528, LON = 7.0174, CLE = 'agenda-cannes-v1', nb = 14;
+  var DEB = 360, FIN = 1320, PAS = 30;          // réglette de 6 h à 22 h, pas de 30 min
+  var CLE2 = 'agenda-cannes-v2', CLE_CATS = 'agenda-cannes-cats-v1';
+  var CATS_DEFAUT = { none:{n:'Sans catégorie',c:'#cbd5e1'}, terrain:{n:'Terrain',c:'#34d399'}, bureau:{n:'Bureau',c:'#60a5fa'},
+                      reunion:{n:'Réunion',c:'#f472b6'}, conges:{n:'Congés',c:'#fbbf24'} };
+  var HUMEURS = { chaud:{e:'🔥',n:'Chaud !'}, dispo:{e:'👍',n:'Disponible'}, besoin:{e:'🙄',n:'Si besoin de moi'}, absent:{e:'⛔',n:'Pas dispo'} };
+  function lire(c) { try { return JSON.parse(localStorage.getItem(c) || 'null'); } catch (e) { return null; } }
+  function ecrire(c, v) { try { localStorage.setItem(c, JSON.stringify(v)); } catch (e) {} }
+  function chargerCats() { var c = lire(CLE_CATS); return (c && c.none) ? c : JSON.parse(JSON.stringify(CATS_DEFAUT)); }
+  function charger() {
+    var d = lire(CLE2), plages;
+    if (d && d.plages) plages = d.plages; else { plages = lire('agenda-cannes-v1') || {}; d = {}; }   // reprise de l'ancienne version
+    Object.keys(plages).forEach(function (k) { plages[k].forEach(function (r) { r.s = Math.max(DEB, Math.min(r.s, FIN - PAS)); r.e = Math.max(r.s + PAS, Math.min(r.e, FIN)); }); });
+    return { plages: plages, humeur: d.humeur || {}, pseudo: d.pseudo || '', demo: !!d.demo };
+  }
+  var CATS = chargerCats(), data = charger();
+  function sauver() { ecrire(CLE2, data); }
+  function pct(m) { return (m - DEB) / (FIN - DEB) * 100; }
+
+  // ---- Éphémérides (équation du lever/coucher, heure de Paris)
+  var fmtH = new Intl.DateTimeFormat('en-GB', { timeZone:'Europe/Paris', hour:'2-digit', minute:'2-digit', hourCycle:'h23' });
+  function minParis(d) { var h = 0, m = 0; fmtH.formatToParts(d).forEach(function (x) { if (x.type === 'hour') h = +x.value; if (x.type === 'minute') m = +x.value; }); return h * 60 + m; }
+  function ephem(y, mo, d) {
+    var rad = Math.PI / 180, J = Date.UTC(y, mo, d, 12) / 86400000 + 2440587.5, n = Math.ceil(J - 2451545.0 + 0.0008), Js = n - LON / 360;
+    var M = (357.5291 + 0.98560028 * Js) % 360, C = 1.9148 * Math.sin(M * rad) + 0.02 * Math.sin(2 * M * rad) + 0.0003 * Math.sin(3 * M * rad);
+    var lam = (M + C + 180 + 102.9372) % 360, Jt = 2451545.0 + Js + 0.0053 * Math.sin(M * rad) - 0.0069 * Math.sin(2 * lam * rad);
+    var dec = Math.asin(Math.sin(lam * rad) * Math.sin(23.4397 * rad));
+    var cw = (Math.sin(-0.833 * rad) - Math.sin(LAT * rad) * Math.sin(dec)) / (Math.cos(LAT * rad) * Math.cos(dec));
+    if (Math.abs(cw) > 1) return null;
+    var w = Math.acos(cw) / (2 * Math.PI), dt = function (j) { return new Date((j - 2440587.5) * 86400000); };
+    return { r: minParis(dt(Jt - w)), s: minParis(dt(Jt + w)) };
+  }
+
+  function hm(m) { return ('0' + Math.floor(m / 60)).slice(-2) + ':' + ('0' + (m % 60)).slice(-2); }
+  function cle(dt) { return dt.getFullYear() + '-' + ('0' + (dt.getMonth() + 1)).slice(-2) + '-' + ('0' + dt.getDate()).slice(-2); }
+  // Fond fin : nuit sombre / jour clair, teinte bleue en semaine, ambre le week-end
+  function degrade(h, e) {
+    var N = 'hsl(' + h + ' 55% 15%)', J = 'hsl(' + h + ' 78% 62%)', r = e ? e.r : 360, s = e ? e.s : 1080;
+    var p = function (m) { return Math.max(0, Math.min(100, pct(m))).toFixed(2) + '%'; };
+    return 'linear-gradient(90deg,' + N + ' 0%,' + N + ' ' + p(r - 45) + ',' + J + ' ' + p(r + 30) + ',' + J + ' ' + p(s - 30) + ',' + N + ' ' + p(s + 45) + ',' + N + ' 100%)';
+  }
+
+  function poignee(bord) {
+    var d = document.createElement('div'); d.className = 'pg ' + bord; d.tabIndex = 0; d.setAttribute('role', 'slider');
+    d.setAttribute('aria-label', bord === 's' ? 'Début de la plage' : 'Fin de la plage'); d.setAttribute('aria-valuemin', DEB); d.setAttribute('aria-valuemax', FIN);
+    return d;
+  }
+  function appliquer(r, bord, m) { m = Math.max(DEB, Math.min(FIN, m)); if (bord === 's') r.s = Math.min(m, r.e - PAS); else r.e = Math.max(m, r.s + PAS); }
+  function glisser(el, bord, r, piste, maj) {
+    el.addEventListener('pointerdown', function (ev) { ev.preventDefault(); el.setPointerCapture(ev.pointerId); el.classList.add('actif'); });
+    el.addEventListener('pointermove', function (ev) {
+      if (!el.hasPointerCapture(ev.pointerId)) return;
+      var rc = piste.getBoundingClientRect();
+      appliquer(r, bord, DEB + Math.round((ev.clientX - rc.left) / rc.width * ((FIN - DEB) / PAS)) * PAS); maj();
+    });
+    el.addEventListener('pointerup', function () { el.classList.remove('actif'); sauver(); });
+    el.addEventListener('pointercancel', function () { el.classList.remove('actif'); sauver(); });
+    el.addEventListener('keydown', function (ev) {
+      var pas = ev.shiftKey ? 60 : PAS, v = bord === 's' ? r.s : r.e;
+      if (ev.key === 'ArrowLeft') appliquer(r, bord, v - pas); else if (ev.key === 'ArrowRight') appliquer(r, bord, v + pas); else return;
+      ev.preventDefault(); maj(); sauver();
+    });
+  }
+
+  var menu = null;
+  function fermerMenu() { if (menu) { menu.remove(); menu = null; } }
+  document.addEventListener('click', fermerMenu);
+  window.addEventListener('scroll', fermerMenu, { passive: true });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { fermerMenu(); fermerTip(); } });
+  function menuHumeur(bouton, k, maj) {
+    var memeBouton = menu && menu._b === bouton; fermerMenu(); if (memeBouton) return;
+    menu = document.createElement('div'); menu.className = 'menu'; menu.setAttribute('role', 'menu'); menu._b = bouton;
+    Object.keys(HUMEURS).concat(['']).forEach(function (c) {
+      var o = document.createElement('button'); o.type = 'button'; o.setAttribute('role', 'menuitem'); o.innerHTML = '<span class="em"></span><span></span>';
+      o.children[0].textContent = c ? HUMEURS[c].e : '⋯'; o.children[1].textContent = c ? HUMEURS[c].n : 'Aucune humeur';
+      o.addEventListener('click', function (ev) { ev.stopPropagation(); if (c) data.humeur[k] = c; else delete data.humeur[k]; sauver(); maj(); fermerMenu(); bouton.focus(); });
+      menu.appendChild(o);
+    });
+    document.body.appendChild(menu);
+    var r = bouton.getBoundingClientRect();
+    menu.style.top = Math.max(8, Math.min(r.bottom + 6, innerHeight - menu.offsetHeight - 8)) + 'px';
+    menu.style.left = Math.max(8, Math.min(r.left, innerWidth - menu.offsetWidth - 8)) + 'px';
+    menu.firstChild.focus();
+  }
+
+  // ---- Équipe : pour l'instant moi (+ collègues fictifs en démo) ; sera remplacé par les données partagées
+  var DEMO = ['Léa', 'Marc', 'Sam', 'Inès'];
+  function alea(str, i) { var h = 2166136261; str += '|' + i; for (var c = 0; c < str.length; c++) { h ^= str.charCodeAt(c); h = Math.imul(h, 16777619); } return ((h >>> 0) % 1000) / 1000; }
+  function plagesDemo(k) {
+    var out = [];
+    DEMO.forEach(function (n, i) {
+      if (alea(k, i * 3) < 0.25) return;
+      var s = DEB + Math.floor(alea(k, i * 3 + 1) * 20) * PAS, l = (4 + Math.floor(alea(k, i * 3 + 2) * 9)) * PAS;
+      out.push({ id: n, nom: n, s: s, e: Math.min(FIN, s + l) });
+    });
+    return out;
+  }
+  function equipe(k) {
+    var moi = data.pseudo || 'Moi', L = (data.plages[k] || []).map(function (r) { return { id: 'moi', nom: moi + ' (vous)', s: r.s, e: r.e }; });
+    return data.demo ? L.concat(plagesDemo(k)) : L;
+  }
+  var tip = null;
+  function fermerTip() { if (tip) { tip.remove(); tip = null; } }
+  document.addEventListener('click', fermerTip);
+  window.addEventListener('scroll', fermerTip, { passive: true });
+  function montrerTip(ev, seg) {
+    fermerTip(); if (!seg) return;
+    var d = seg._d, nb = d.noms.length;
+    tip = document.createElement('div'); tip.className = 'tip';
+    var t = document.createElement('b'); t.textContent = hm(d.a) + ' – ' + hm(d.b) + ' · ' + (nb ? nb + (nb > 1 ? ' personnes' : ' personne') : 'personne');
+    tip.appendChild(t);
+    if (nb) { var n = document.createElement('div'); n.textContent = d.noms.join(', '); tip.appendChild(n); }
+    document.body.appendChild(tip);
+    tip.style.left = Math.max(8, Math.min(ev.clientX - tip.offsetWidth / 2, innerWidth - tip.offsetWidth - 8)) + 'px';
+    tip.style.top = Math.max(8, ev.clientY - tip.offsetHeight - 14) + 'px';
+  }
+
+  function carteJour(dt, i) {
+    var k = cle(dt), we = dt.getDay() === 0 || dt.getDay() === 6, eph = ephem(dt.getFullYear(), dt.getMonth(), dt.getDate());
+    var sec = document.createElement('section'); sec.className = 'jour' + (i === 0 ? ' auj' : '');
+    sec.innerHTML = '<div class="tete"><button class="humeur" type="button" aria-haspopup="menu" aria-label="Humeur du jour"></button><div><b class="t"></b> <span class="d"></span></div><div class="eph"></div>' +
+      '<button class="plus" type="button" aria-label="Ajouter une plage horaire">+</button></div>' +
+      '<div class="piste"><div class="fond"></div></div>' +
+      '<div class="heures"></div><div class="equipe" role="img" aria-label="Disponibilités de l’équipe"></div>' +
+      '<div class="lignes"></div>';
+    sec.querySelector('.t').textContent = i === 0 ? 'Aujourd’hui' : i === 1 ? 'Demain' : '';
+    sec.querySelector('.d').textContent = dt.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'short' }) + (we ? ' · week-end' : '');
+    var piste = sec.querySelector('.piste'), lignes = sec.querySelector('.lignes');
+    var reglette = sec.querySelector('.heures');
+    for (var hh = 6; hh <= 22; hh += 2) { var sp = document.createElement('span'); sp.style.left = (hh - 6) / 16 * 100 + '%'; sp.textContent = hh; reglette.appendChild(sp); }
+    var bH = sec.querySelector('.humeur');
+    function majHumeur() { var h = HUMEURS[data.humeur[k]]; bH.textContent = h ? h.e : '⋯'; bH.title = h ? h.n : 'Humeur du jour'; bH.classList.toggle('vide', !h); }
+    bH.addEventListener('click', function (ev) { ev.stopPropagation(); menuHumeur(bH, k, majHumeur); });
+    majHumeur();
+    var barreEq = sec.querySelector('.equipe');
+    barreEq.addEventListener('pointermove', function (ev) { if (ev.pointerType === 'mouse') montrerTip(ev, ev.target.closest('.seg')); });
+    barreEq.addEventListener('pointerleave', function (ev) { if (ev.pointerType === 'mouse') fermerTip(); });
+    barreEq.addEventListener('click', function (ev) { ev.stopPropagation(); fermerMenu(); montrerTip(ev, ev.target.closest('.seg')); });
+    function majEquipe() {
+      barreEq.innerHTML = '';
+      var L = equipe(k), pts = [DEB, FIN];
+      L.forEach(function (r) { pts.push(r.s, r.e); });
+      pts = pts.filter(function (m, j, arr) { return m >= DEB && m <= FIN && arr.indexOf(m) === j; }).sort(function (x, y) { return x - y; });
+      for (var j = 0; j < pts.length - 1; j++) {
+        var a = pts[j], b = pts[j + 1], ids = [], noms = [];
+        L.forEach(function (r) { if (r.s <= a && r.e >= b && ids.indexOf(r.id) < 0) { ids.push(r.id); noms.push(r.nom); } });
+        var seg = document.createElement('div'); seg.className = 'seg n' + Math.min(ids.length, 3);
+        seg.style.left = pct(a) + '%'; seg.style.width = (pct(b) - pct(a)) + '%'; seg._d = { a: a, b: b, noms: noms };
+        barreEq.appendChild(seg);
+      }
+    }
+    sec.querySelector('.fond').style.background = degrade(we ? 28 : 212, eph);
+    sec.querySelector('.eph').textContent = eph ? '↑ ' + hm(eph.r) + '  ↓ ' + hm(eph.s) : '';
+    if (eph) [['r', eph.r, 'Lever du soleil '], ['c', eph.s, 'Coucher du soleil ']].forEach(function (x) {
+      var s = document.createElement('span'); s.className = 'sol ' + x[0]; s.style.left = pct(x[1]) + '%'; s.title = x[2] + hm(x[1]); if (x[1] >= DEB && x[1] <= FIN) piste.appendChild(s);
+    });
+    if (i === 0 && minParis(new Date()) >= DEB && minParis(new Date()) <= FIN) { var n = document.createElement('span'); n.className = 'maint'; n.style.left = pct(minParis(new Date())) + '%'; n.title = 'Maintenant'; piste.appendChild(n); }
+    var zone = document.createElement('div'); zone.className = 'zone'; piste.appendChild(zone);
+
+    function dessiner() {
+      zone.innerHTML = ''; lignes.innerHTML = ''; majEquipe();
+      (data.plages[k] || []).forEach(function (r, idx) {
+        var p = document.createElement('div'); p.className = 'plage';
+        var a = poignee('s'), b = poignee('e'); p.appendChild(a); p.appendChild(b); zone.appendChild(p);
+        var l = document.createElement('div'); l.className = 'ligne';
+        l.innerHTML = '<span class="pt"></span><b class="hh"></b><select aria-label="Catégorie"></select><button type="button" class="x" aria-label="Supprimer cette plage">×</button>';
+        var sel = l.querySelector('select');
+        Object.keys(CATS).forEach(function (c) { var o = document.createElement('option'); o.value = c; o.textContent = CATS[c].n; sel.appendChild(o); });
+        sel.value = CATS[r.c] ? r.c : 'none';
+        function maj() {
+          var col = (CATS[r.c] || CATS.none).c;
+          p.style.left = pct(r.s) + '%'; p.style.width = (pct(r.e) - pct(r.s)) + '%'; p.style.background = col;
+          l.querySelector('.pt').style.background = col; l.querySelector('.hh').textContent = hm(r.s) + ' – ' + hm(r.e);
+          a.setAttribute('aria-valuenow', r.s); b.setAttribute('aria-valuenow', r.e); majEquipe();
+        }
+        glisser(a, 's', r, piste, maj); glisser(b, 'e', r, piste, maj);
+        sel.addEventListener('change', function () { r.c = sel.value; maj(); sauver(); });
+        l.querySelector('.x').addEventListener('click', function () { data.plages[k].splice(idx, 1); if (!data.plages[k].length) delete data.plages[k]; sauver(); dessiner(); });
+        lignes.appendChild(l); maj();
+      });
+    }
+    sec.querySelector('.plus').addEventListener('click', function () {
+      var L = data.plages[k] = data.plages[k] || [], s = L.length ? Math.min(L[L.length - 1].e, FIN - 30) : 540, e = L.length ? Math.min(s + 60, FIN) : 1020;
+      L.push({ s: s, e: e, c: 'none' }); sauver(); dessiner();
+    });
+    dessiner(); return sec;
+  }
+
+  function rendre() {
+    var cont = document.getElementById('jours'), t = new Date(); cont.innerHTML = '';
+    for (var i = 0; i < nb; i++) cont.appendChild(carteJour(new Date(t.getFullYear(), t.getMonth(), t.getDate() + i), i));
+  }
+  var cPseudo = document.getElementById('pseudo'), cDemo = document.getElementById('demo');
+  cPseudo.value = data.pseudo || '';
+  cPseudo.addEventListener('input', function () { data.pseudo = cPseudo.value.trim().slice(0, 24); sauver(); });
+  cDemo.checked = !!data.demo;
+  cDemo.addEventListener('change', function () { data.demo = cDemo.checked; sauver(); rendre(); });
+  document.getElementById('plusJours').addEventListener('click', function () { nb += 14; rendre(); });
+  function majLegende() {
+    var lg = document.getElementById('legende'); lg.innerHTML = '';
+    Object.keys(CATS).forEach(function (c) {
+      var sp = document.createElement('span'), i = document.createElement('i'); i.style.background = CATS[c].c;
+      sp.appendChild(i); sp.appendChild(document.createTextNode(CATS[c].n)); lg.appendChild(sp);
+    });
+  }
+  var ESTADMIN = true;   // sera réservé aux admins (table "admins") une fois Supabase branché
+  var dlg = document.getElementById('dlgAdmin'), listeCats = document.getElementById('listeCats');
+  function sauverCats() { ecrire(CLE_CATS, CATS); majLegende(); rendre(); }
+  function dessinerCats() {
+    listeCats.innerHTML = '';
+    Object.keys(CATS).forEach(function (id) {
+      var l = document.createElement('div'); l.className = 'cat';
+      l.innerHTML = '<input type="color" aria-label="Couleur"><input type="text" maxlength="30" aria-label="Nom de la catégorie"><button type="button" class="x" aria-label="Supprimer la catégorie">×</button>';
+      var col = l.children[0], nom = l.children[1], sup = l.children[2];
+      col.value = CATS[id].c; nom.value = CATS[id].n;
+      col.addEventListener('input', function () { CATS[id].c = col.value; sauverCats(); });
+      nom.addEventListener('input', function () { CATS[id].n = nom.value.trim() || 'Sans nom'; sauverCats(); });
+      if (id === 'none') sup.disabled = true;
+      sup.addEventListener('click', function () {
+        if (!confirm('Supprimer cette catégorie ? Ses plages passeront en « sans catégorie ».')) return;
+        Object.keys(data.plages).forEach(function (k) { data.plages[k].forEach(function (r) { if (r.c === id) r.c = 'none'; }); });
+        delete CATS[id]; sauver(); sauverCats(); dessinerCats();
+      });
+      listeCats.appendChild(l);
+    });
+  }
+  document.getElementById('bAdmin').hidden = !ESTADMIN;
+  document.getElementById('bAdmin').addEventListener('click', function () { dessinerCats(); dlg.showModal(); });
+  document.getElementById('ajoutCat').addEventListener('click', function () { CATS['c' + Date.now().toString(36)] = { n: 'Nouvelle catégorie', c: '#a78bfa' }; sauverCats(); dessinerCats(); });
+  document.getElementById('fermerAdmin').addEventListener('click', function () { dlg.close(); });
+  majLegende();
+  rendre();
+})();
+</script>
+</body>
+</html>
