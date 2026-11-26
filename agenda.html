@@ -83,20 +83,37 @@
   .pseudo { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--doux); max-width:860px; margin:8px auto 0; }
   .pseudo input { background:#232834; color:var(--txt); border:1px solid var(--ligne); border-radius:8px; font:inherit; font-size:16px; padding:6px 10px; min-height:38px; width:190px; max-width:60vw; }
   label.note { display:flex; align-items:center; gap:8px; }
+  [hidden] { display:none !important; }
+  #connexion { position:fixed; inset:0; z-index:100; background:var(--bg); display:grid; place-items:center; padding:20px; }
+  #formConn { width:min(380px,100%); }
+  #formConn h2 { margin:0 0 8px; }
+  #formConn p { color:var(--doux); font-size:14px; }
+  #formConn input { width:100%; background:#232834; color:var(--txt); border:1px solid var(--ligne); border-radius:8px; font:inherit; font-size:16px; padding:10px 12px; min-height:44px; }
 </style>
 </head>
 <body>
 <header>
-  <div class="haut"><h1>Agenda</h1><div class="actions"><button class="retour" id="bAdmin" type="button">Admin</button><a class="retour" href="carte-cannes.html">← Carte</a></div></div>
+  <div class="haut"><h1>Agenda</h1><div class="actions"><button class="retour" id="bAdmin" type="button" hidden>Admin</button><button class="retour" id="bSortie" type="button" hidden>Quitter</button><a class="retour" href="carte-cannes.html">← Carte</a></div></div>
   <label class="pseudo">Mon pseudo <input id="pseudo" type="text" maxlength="24" placeholder="Visible par l’équipe" autocomplete="nickname"></label>
+  <div class="legende" id="etat" aria-live="polite"></div>
   <div class="legende" id="legende" aria-label="Catégories"></div>
 </header>
 <main>
-  <p class="note">Faites glisser les deux curseurs d’une plage (pas de 30 min, de 6 h à 22 h). Le fond de chaque journée suit le lever et le coucher du soleil à Cannes (points jaune et orange). La fine barre sous la réglette indique combien de personnes sont disponibles : survolez-la ou touchez-la pour voir qui. Pour l’instant, les données restent sur cet appareil.</p>
+  <p class="note">Faites glisser les deux curseurs d’une plage (pas de 30 min, de 6 h à 22 h). Le fond de chaque journée suit le lever et le coucher du soleil à Cannes (points jaune et orange). La fine barre sous la réglette indique combien de personnes sont disponibles : survolez-la ou touchez-la pour voir qui. Vos plages sont partagées avec l’équipe.</p>
   <label class="note"><input type="checkbox" id="demo"> Aperçu avec 4 collègues fictifs (données de démonstration)</label>
   <div id="jours"></div>
   <button class="suite" id="plusJours" type="button">Afficher 14 jours de plus</button>
 </main>
+
+<div id="connexion" hidden>
+  <form id="formConn">
+    <h2>Connexion</h2>
+    <p>Entrez votre adresse e-mail : vous recevrez un lien de connexion. Accès réservé aux personnes invitées.</p>
+    <input id="mail" type="email" required autocomplete="email" placeholder="vous@exemple.fr">
+    <button class="suite" type="submit">Recevoir le lien</button>
+    <p id="msgConn" role="status"></p>
+  </form>
+</div>
 
 <dialog id="dlgAdmin" aria-labelledby="dlgTitre">
   <h2 id="dlgTitre">Administration · catégories</h2>
@@ -106,26 +123,87 @@
   <button class="suite" id="fermerAdmin" type="button" style="margin:0;width:auto">Fermer</button></div>
 </dialog>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.81.1/dist/umd/supabase.js"></script>
 <script>
 (function () {
   var LAT = 43.5528, LON = 7.0174, CLE = 'agenda-cannes-v1', nb = 14;
   var DEB = 360, FIN = 1320, PAS = 30;          // réglette de 6 h à 22 h, pas de 30 min
-  var CLE2 = 'agenda-cannes-v2', CLE_CATS = 'agenda-cannes-cats-v1';
+  var sb = window.supabase.createClient('https://yivnpmrssaemsagpsffh.supabase.co', 'sb_publishable_V4cReQKBom-QdRjec-MfVA_ZZcDsIoB');
   var CATS_DEFAUT = { none:{n:'Sans catégorie',c:'#cbd5e1'}, terrain:{n:'Terrain',c:'#34d399'}, bureau:{n:'Bureau',c:'#60a5fa'},
                       reunion:{n:'Réunion',c:'#f472b6'}, conges:{n:'Congés',c:'#fbbf24'} };
   var HUMEURS = { chaud:{e:'🔥',n:'Chaud !'}, dispo:{e:'👍',n:'Disponible'}, besoin:{e:'🙄',n:'Si besoin de moi'}, absent:{e:'⛔',n:'Pas dispo'} };
-  function lire(c) { try { return JSON.parse(localStorage.getItem(c) || 'null'); } catch (e) { return null; } }
-  function ecrire(c, v) { try { localStorage.setItem(c, JSON.stringify(v)); } catch (e) {} }
-  function chargerCats() { var c = lire(CLE_CATS); return (c && c.none) ? c : JSON.parse(JSON.stringify(CATS_DEFAUT)); }
-  function charger() {
-    var d = lire(CLE2), plages;
-    if (d && d.plages) plages = d.plages; else { plages = lire('agenda-cannes-v1') || {}; d = {}; }   // reprise de l'ancienne version
-    Object.keys(plages).forEach(function (k) { plages[k].forEach(function (r) { r.s = Math.max(DEB, Math.min(r.s, FIN - PAS)); r.e = Math.max(r.s + PAS, Math.min(r.e, FIN)); }); });
-    return { plages: plages, humeur: d.humeur || {}, pseudo: d.pseudo || '', demo: !!d.demo };
-  }
-  var CATS = chargerCats(), data = charger();
-  function sauver() { ecrire(CLE2, data); }
+  var CATS = JSON.parse(JSON.stringify(CATS_DEFAUT));
+  var data = { plages: {}, humeur: {}, pseudo: '', demo: false };
+  try { data.demo = localStorage.getItem('agenda-demo') === '1'; } catch (e) {}
+  var autres = {}, profils = {}, connus = {}, humConnues = {}, moi = null, estAdmin = false, lance = false;
+  var enGlisse = false, aRafraichir = false, syncEnCours = false, minSync = null, minRec = null;
   function pct(m) { return (m - DEB) / (FIN - DEB) * 100; }
+  function etat(t) { document.getElementById('etat').textContent = t || ''; }
+
+  // Enregistre sur le serveur ce qui a changé (plages et humeurs), regroupé après 250 ms
+  function sauver() { clearTimeout(minSync); minSync = setTimeout(synchro, 250); }
+  async function synchro() {
+    minSync = null; if (!moi) return;
+    if (syncEnCours) { sauver(); return; }
+    syncEnCours = true; etat('Enregistrement…');
+    try {
+      var presentes = {};
+      for (var k of Object.keys(data.plages)) for (var r of data.plages[k]) {
+        var sig = r.s + '|' + r.e + '|' + r.c + '|' + k;
+        if (!r.id) {
+          var ins = await sb.from('disponibilites').insert({ jour: k, debut: r.s, fin: r.e, categorie: r.c }).select('id').single();
+          if (ins.error) throw ins.error; r.id = ins.data.id; connus[r.id] = sig;
+        } else if (connus[r.id] !== sig) {
+          var up = await sb.from('disponibilites').update({ debut: r.s, fin: r.e, categorie: r.c }).eq('id', r.id);
+          if (up.error) throw up.error; connus[r.id] = sig;
+        }
+        presentes[r.id] = 1;
+      }
+      for (var id of Object.keys(connus)) if (!presentes[id]) {
+        var del = await sb.from('disponibilites').delete().eq('id', id); if (del.error) throw del.error; delete connus[id];
+      }
+      for (var j of Object.keys(data.humeur)) if (humConnues[j] !== data.humeur[j]) {
+        var h = await sb.from('humeurs').upsert({ utilisateur: moi.id, jour: j, humeur: data.humeur[j] }); if (h.error) throw h.error; humConnues[j] = data.humeur[j];
+      }
+      for (var j2 of Object.keys(humConnues)) if (!data.humeur[j2]) {
+        var dh = await sb.from('humeurs').delete().eq('utilisateur', moi.id).eq('jour', j2); if (dh.error) throw dh.error; delete humConnues[j2];
+      }
+      etat('Synchronisé');
+    } catch (e) { etat('⚠ Erreur : ' + (e.message || e)); }
+    syncEnCours = false; if (aRafraichir) planRec();
+  }
+
+  // Recharge tout depuis le serveur (équipe comprise)
+  function planRec() {
+    aRafraichir = true;
+    if (enGlisse || syncEnCours || minSync) return;
+    aRafraichir = false; clearTimeout(minRec); minRec = setTimeout(recharger, 300);
+  }
+  async function recharger() {
+    if (!moi) return;
+    if (enGlisse || syncEnCours || minSync) { aRafraichir = true; return; }
+    var t = new Date(), d0 = cle(t), d1 = cle(new Date(t.getFullYear(), t.getMonth(), t.getDate() + nb - 1));
+    var r = await Promise.all([
+      sb.from('categories').select('id,nom,couleur,ordre').order('ordre'),
+      sb.from('profils').select('user_id,pseudo'),
+      sb.from('disponibilites').select('id,utilisateur,jour,debut,fin,categorie').gte('jour', d0).lte('jour', d1),
+      sb.from('humeurs').select('jour,humeur').eq('utilisateur', moi.id).gte('jour', d0).lte('jour', d1)
+    ]);
+    var err = r.map(function (x) { return x.error; }).filter(Boolean)[0];
+    if (err) { etat('⚠ ' + err.message); return; }
+    if (r[0].data.length) { CATS = {}; r[0].data.forEach(function (c) { CATS[c.id] = { n: c.nom, c: c.couleur, o: c.ordre }; }); }
+    profils = {}; r[1].data.forEach(function (p) { profils[p.user_id] = p.pseudo; });
+    data.pseudo = profils[moi.id] || ''; document.getElementById('pseudo').value = data.pseudo;
+    data.plages = {}; autres = {}; connus = {};
+    r[2].data.forEach(function (x) {
+      if (x.utilisateur === moi.id) {
+        (data.plages[x.jour] = data.plages[x.jour] || []).push({ id: x.id, s: x.debut, e: x.fin, c: x.categorie });
+        connus[x.id] = x.debut + '|' + x.fin + '|' + x.categorie + '|' + x.jour;
+      } else (autres[x.jour] = autres[x.jour] || []).push({ id: x.utilisateur, nom: profils[x.utilisateur] || 'Anonyme', s: x.debut, e: x.fin });
+    });
+    data.humeur = {}; humConnues = {}; r[3].data.forEach(function (h) { data.humeur[h.jour] = h.humeur; humConnues[h.jour] = h.humeur; });
+    etat('Connecté : ' + moi.email); majLegende(); rendre();
+  }
 
   // ---- Éphémérides (équation du lever/coucher, heure de Paris)
   var fmtH = new Intl.DateTimeFormat('en-GB', { timeZone:'Europe/Paris', hour:'2-digit', minute:'2-digit', hourCycle:'h23' });
@@ -157,14 +235,14 @@
   }
   function appliquer(r, bord, m) { m = Math.max(DEB, Math.min(FIN, m)); if (bord === 's') r.s = Math.min(m, r.e - PAS); else r.e = Math.max(m, r.s + PAS); }
   function glisser(el, bord, r, piste, maj) {
-    el.addEventListener('pointerdown', function (ev) { ev.preventDefault(); el.setPointerCapture(ev.pointerId); el.classList.add('actif'); });
+    el.addEventListener('pointerdown', function (ev) { ev.preventDefault(); el.setPointerCapture(ev.pointerId); el.classList.add('actif'); enGlisse = true; });
     el.addEventListener('pointermove', function (ev) {
       if (!el.hasPointerCapture(ev.pointerId)) return;
       var rc = piste.getBoundingClientRect();
       appliquer(r, bord, DEB + Math.round((ev.clientX - rc.left) / rc.width * ((FIN - DEB) / PAS)) * PAS); maj();
     });
-    el.addEventListener('pointerup', function () { el.classList.remove('actif'); sauver(); });
-    el.addEventListener('pointercancel', function () { el.classList.remove('actif'); sauver(); });
+    el.addEventListener('pointerup', function () { el.classList.remove('actif'); enGlisse = false; sauver(); });
+    el.addEventListener('pointercancel', function () { el.classList.remove('actif'); enGlisse = false; sauver(); });
     el.addEventListener('keydown', function (ev) {
       var pas = ev.shiftKey ? 60 : PAS, v = bord === 's' ? r.s : r.e;
       if (ev.key === 'ArrowLeft') appliquer(r, bord, v - pas); else if (ev.key === 'ArrowRight') appliquer(r, bord, v + pas); else return;
@@ -206,7 +284,7 @@
     return out;
   }
   function equipe(k) {
-    var moi = data.pseudo || 'Moi', L = (data.plages[k] || []).map(function (r) { return { id: 'moi', nom: moi + ' (vous)', s: r.s, e: r.e }; });
+    var L = (data.plages[k] || []).map(function (r) { return { id: 'moi', nom: (data.pseudo || 'Moi') + ' (vous)', s: r.s, e: r.e }; }).concat(autres[k] || []);
     return data.demo ? L.concat(plagesDemo(k)) : L;
   }
   var tip = null;
@@ -301,11 +379,15 @@
     for (var i = 0; i < nb; i++) cont.appendChild(carteJour(new Date(t.getFullYear(), t.getMonth(), t.getDate() + i), i));
   }
   var cPseudo = document.getElementById('pseudo'), cDemo = document.getElementById('demo');
-  cPseudo.value = data.pseudo || '';
-  cPseudo.addEventListener('input', function () { data.pseudo = cPseudo.value.trim().slice(0, 24); sauver(); });
+  cPseudo.addEventListener('change', async function () {
+    var p = cPseudo.value.trim().slice(0, 24); if (!p || !moi) { cPseudo.value = data.pseudo; return; }
+    var r = await sb.from('profils').upsert({ user_id: moi.id, pseudo: p });
+    if (r.error) { alert(r.error.code === '23505' ? 'Ce pseudo est déjà pris, choisissez-en un autre.' : r.error.message); cPseudo.value = data.pseudo; return; }
+    data.pseudo = p; profils[moi.id] = p; rendre();
+  });
   cDemo.checked = !!data.demo;
-  cDemo.addEventListener('change', function () { data.demo = cDemo.checked; sauver(); rendre(); });
-  document.getElementById('plusJours').addEventListener('click', function () { nb += 14; rendre(); });
+  cDemo.addEventListener('change', function () { data.demo = cDemo.checked; try { localStorage.setItem('agenda-demo', data.demo ? '1' : '0'); } catch (e) {} rendre(); });
+  document.getElementById('plusJours').addEventListener('click', function () { nb += 14; recharger(); });
   function majLegende() {
     var lg = document.getElementById('legende'); lg.innerHTML = '';
     Object.keys(CATS).forEach(function (c) {
@@ -313,9 +395,15 @@
       sp.appendChild(i); sp.appendChild(document.createTextNode(CATS[c].n)); lg.appendChild(sp);
     });
   }
-  var ESTADMIN = true;   // sera réservé aux admins (table "admins") une fois Supabase branché
+  var minCats = null;
   var dlg = document.getElementById('dlgAdmin'), listeCats = document.getElementById('listeCats');
-  function sauverCats() { ecrire(CLE_CATS, CATS); majLegende(); rendre(); }
+  function sauverCats() {
+    majLegende(); rendre(); clearTimeout(minCats);
+    minCats = setTimeout(function () {
+      sb.from('categories').upsert(Object.keys(CATS).map(function (id, i) { return { id: id, nom: CATS[id].n, couleur: CATS[id].c, ordre: CATS[id].o != null ? CATS[id].o : i }; }))
+        .then(function (r) { if (r.error) etat('⚠ ' + r.error.message); });
+    }, 600);
+  }
   function dessinerCats() {
     listeCats.innerHTML = '';
     Object.keys(CATS).forEach(function (id) {
@@ -329,17 +417,37 @@
       sup.addEventListener('click', function () {
         if (!confirm('Supprimer cette catégorie ? Ses plages passeront en « sans catégorie ».')) return;
         Object.keys(data.plages).forEach(function (k) { data.plages[k].forEach(function (r) { if (r.c === id) r.c = 'none'; }); });
-        delete CATS[id]; sauver(); sauverCats(); dessinerCats();
+        delete CATS[id]; sauver(); majLegende(); rendre(); dessinerCats();
+        sb.from('categories').delete().eq('id', id).then(function (r) { if (r.error) etat('⚠ ' + r.error.message); });
       });
       listeCats.appendChild(l);
     });
   }
-  document.getElementById('bAdmin').hidden = !ESTADMIN;
   document.getElementById('bAdmin').addEventListener('click', function () { dessinerCats(); dlg.showModal(); });
-  document.getElementById('ajoutCat').addEventListener('click', function () { CATS['c' + Date.now().toString(36)] = { n: 'Nouvelle catégorie', c: '#a78bfa' }; sauverCats(); dessinerCats(); });
+  document.getElementById('ajoutCat').addEventListener('click', function () { CATS['c' + Date.now().toString(36)] = { n: 'Nouvelle catégorie', c: '#a78bfa', o: Object.keys(CATS).length }; sauverCats(); dessinerCats(); });
   document.getElementById('fermerAdmin').addEventListener('click', function () { dlg.close(); });
   majLegende();
-  rendre();
+  document.getElementById('formConn').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var msg = document.getElementById('msgConn'); msg.textContent = 'Envoi…';
+    var r = await sb.auth.signInWithOtp({ email: document.getElementById('mail').value.trim(), options: { shouldCreateUser: false, emailRedirectTo: location.origin + location.pathname } });
+    msg.textContent = r.error ? 'Impossible d’envoyer le lien : ' + r.error.message : 'Lien envoyé ! Ouvrez le mail sur cet appareil.';
+  });
+  document.getElementById('bSortie').addEventListener('click', async function () { await sb.auth.signOut(); location.reload(); });
+  async function demarrer() {
+    if (lance) return;
+    var s = await sb.auth.getSession();
+    if (!s.data.session) { document.getElementById('connexion').hidden = false; return; }
+    lance = true; document.getElementById('connexion').hidden = true; moi = s.data.session.user;
+    document.getElementById('bSortie').hidden = false;
+    var a = await sb.from('admins').select('user_id').eq('user_id', moi.id).maybeSingle();
+    estAdmin = !!a.data; document.getElementById('bAdmin').hidden = !estAdmin;
+    await recharger();
+    ['disponibilites', 'profils', 'categories'].forEach(function (t) { sb.channel('agenda-' + t).on('postgres_changes', { event: '*', schema: 'public', table: t }, planRec).subscribe(); });
+  }
+  sb.auth.onAuthStateChange(function (ev) { if (ev === 'SIGNED_IN') demarrer(); });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden && moi) planRec(); });
+  demarrer();
 })();
 </script>
 </body>
